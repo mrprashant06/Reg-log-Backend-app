@@ -1,17 +1,17 @@
 package com.ecommerce.reglog.controller;
 
-import com.ecommerce.reglog.dto.request.LoginUserDto;
-import com.ecommerce.reglog.dto.request.RegisterUserDto;
-import com.ecommerce.reglog.dto.request.SendOtpDto;
-import com.ecommerce.reglog.dto.request.VerifyOtpDto;
+import com.ecommerce.reglog.dto.request.*;
 import com.ecommerce.reglog.entity.OtpVerification;
 import com.ecommerce.reglog.entity.User;
 import com.ecommerce.reglog.repository.OtpVerificationRepository;
 import com.ecommerce.reglog.repository.UserRepository;
 import com.ecommerce.reglog.security.JwtTokenProvider;
 import com.ecommerce.reglog.security.UserPrincipal;
+import com.ecommerce.reglog.service.TokenBlacklistService;
+import com.ecommerce.reglog.util.ValidationUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +32,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin(originPatterns = "*", allowCredentials = "true")
-@Tag(name = "E-Commerce Glassmorphic Auth API", description = "Endpoints for Registration, Login, and Multi-factor OTP Verification")
+@Tag(name = "E-Commerce Glassmorphic Auth API", description = "Endpoints for Registration, Login, Forgot Password, Change Password, and OTP Verification")
 public class AuthApiController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthApiController.class);
@@ -41,15 +42,18 @@ public class AuthApiController {
     private final OtpVerificationRepository otpVerificationRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final TokenBlacklistService tokenBlacklistService;
 
     public AuthApiController(UserRepository userRepository,
                              OtpVerificationRepository otpVerificationRepository,
                              PasswordEncoder passwordEncoder,
-                             JwtTokenProvider jwtTokenProvider) {
+                             JwtTokenProvider jwtTokenProvider,
+                             TokenBlacklistService tokenBlacklistService) {
         this.userRepository = userRepository;
         this.otpVerificationRepository = otpVerificationRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     /**
@@ -80,7 +84,6 @@ public class AuthApiController {
         response.put("identifier", identifier);
         response.put("purpose", purpose);
         response.put("expiresInSeconds", 300);
-        // Include OTP in payload for seamless demo testing and UI feedback
         response.put("otp", otpCode);
 
         return ResponseEntity.ok(response);
@@ -142,34 +145,65 @@ public class AuthApiController {
     }
 
     /**
-     * User Sign Up endpoint.
+     * User Sign Up endpoint with strict validation rules:
+     * - Full name: min 3, max 100 characters
+     * - Email / Mobile number: unique, valid format
+     * - Password: min 8 characters, 1 uppercase, 1 lowercase, 1 numeric, 1 special character
+     * - Confirmed password must match
+     * - Password encrypted via BCrypt
      */
     @PostMapping("/register")
-    @Operation(summary = "Register User Account", description = "Registers user into MySQL database using Password or OTP.")
+    @Operation(summary = "Register User Account", description = "Registers user into MySQL database using Password or OTP with comprehensive validation.")
     public ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegisterUserDto dto) {
+        // 1. Validate Full Name
+        if (!ValidationUtils.isValidFullName(dto.getFullName())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Full Name must be between 3 and 100 characters long.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
         String identifier = dto.getIdentifier().trim();
         String authPreference = dto.getAuthPreference() != null ? dto.getAuthPreference().toUpperCase().trim() : "PASSWORD";
         boolean isEmail = identifier.contains("@");
 
-        String email = isEmail ? identifier.toLowerCase() : null;
-        String phone = !isEmail ? identifier : null;
+        String email = null;
+        String phone = null;
 
-        // Check if identifier already registered
-        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("success", false);
-            err.put("message", "An account with email " + email + " already exists. Please log in.");
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
-        }
-        if (phone != null && userRepository.existsByPhone(phone)) {
-            Map<String, Object> err = new HashMap<>();
-            err.put("success", false);
-            err.put("message", "An account with phone number " + phone + " already exists. Please log in.");
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
+        // 2. Validate Contact Format & Uniqueness
+        if (isEmail) {
+            email = identifier.toLowerCase();
+            if (!ValidationUtils.isValidEmail(email)) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "Please enter a valid email address (e.g. name@domain.com).");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+            }
+            if (userRepository.existsByEmailIgnoreCase(email)) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "An account with email " + email + " already exists. Please log in.");
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
+            }
+        } else {
+            phone = ValidationUtils.cleanPhone(identifier);
+            if (!ValidationUtils.isValidPhone(phone)) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "Mobile number must contain between 10 and 15 digits.");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+            }
+            if (userRepository.existsByPhone(phone)) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "An account with mobile number " + phone + " already exists. Please log in.");
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
+            }
         }
 
         String passwordHash = null;
 
+        // 3. Validate Password Security Requirements
         if ("PASSWORD".equals(authPreference)) {
             if (!StringUtils.hasText(dto.getPassword())) {
                 Map<String, Object> err = new HashMap<>();
@@ -177,12 +211,22 @@ public class AuthApiController {
                 err.put("message", "Password is required for Password verification mode.");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
             }
-            if (dto.getConfirmPassword() != null && !dto.getPassword().equals(dto.getConfirmPassword())) {
+
+            String passwordError = ValidationUtils.getPasswordValidationError(dto.getPassword());
+            if (passwordError != null) {
                 Map<String, Object> err = new HashMap<>();
                 err.put("success", false);
-                err.put("message", "Passwords do not match. Please re-enter.");
+                err.put("message", passwordError);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
             }
+
+            if (dto.getConfirmPassword() == null || !dto.getPassword().equals(dto.getConfirmPassword())) {
+                Map<String, Object> err = new HashMap<>();
+                err.put("success", false);
+                err.put("message", "Confirmed password does not match the password.");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+            }
+
             passwordHash = passwordEncoder.encode(dto.getPassword());
         } else if ("OTP".equals(authPreference)) {
             if (!StringUtils.hasText(dto.getOtpCode())) {
@@ -192,7 +236,6 @@ public class AuthApiController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
             }
 
-            // Verify the OTP code
             Optional<OtpVerification> optOtp = otpVerificationRepository
                     .findTopByIdentifierAndPurposeAndIsConsumedFalseOrderByCreatedAtDesc(identifier, "REGISTRATION");
 
@@ -207,11 +250,10 @@ public class AuthApiController {
                 record.setIsConsumed(true);
                 otpVerificationRepository.save(record);
             }
-            // For OTP users, create a random secure hash
             passwordHash = passwordEncoder.encode("OTP_AUTH_" + secureRandom.nextInt(1000000));
         }
 
-        // Create new User entity
+        // 4. Save User in Database
         User user = new User();
         user.setFullName(dto.getFullName().trim());
         user.setEmail(email);
@@ -224,7 +266,7 @@ public class AuthApiController {
         user.setStatus("ACTIVE");
 
         User savedUser = userRepository.save(user);
-        logger.info("New User successfully registered: ID={}, Name={}, Contact={}",
+        logger.info("New User registered successfully in MySQL: ID={}, Name={}, Contact={}",
                 savedUser.getId(), savedUser.getFullName(), identifier);
 
         Map<String, Object> userMap = new HashMap<>();
@@ -320,7 +362,7 @@ public class AuthApiController {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Generate JWT
+        // Generate JWT Access Token
         UserPrincipal principal = UserPrincipal.create(user);
         String token = jwtTokenProvider.generateTokenFromUserPrincipal(principal);
 
@@ -340,6 +382,204 @@ public class AuthApiController {
         response.put("token", token);
         response.put("user", userMap);
 
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Forgot Password Step 1: Send Password Reset OTP
+     * Accepts registered email or mobile number, validates user existence, generates 6-digit OTP.
+     */
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Forgot Password - Send OTP", description = "Sends 6-digit OTP to registered email or mobile number for password reset.")
+    public ResponseEntity<Map<String, Object>> forgotPassword(@Valid @RequestBody ForgotPasswordDto dto) {
+        String identifier = dto.getIdentifier().trim();
+
+        // Check if user exists in database
+        Optional<User> optUser = userRepository.findByIdentifier(identifier);
+        if (optUser.isEmpty()) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "No registered account found with that email or mobile number.");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
+        }
+
+        int code = 100000 + secureRandom.nextInt(900000);
+        String otpCode = String.valueOf(code);
+
+        Instant expiresAt = Instant.now().plusSeconds(300);
+        OtpVerification otpVerification = new OtpVerification(identifier, otpCode, "PASSWORD_RESET", expiresAt);
+        otpVerificationRepository.save(otpVerification);
+
+        logger.info("=================================================");
+        logger.info(">>> PASSWORD RESET OTP [{}] GENERATED FOR [{}]", otpCode, identifier);
+        logger.info("=================================================");
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Password reset OTP sent to " + identifier);
+        response.put("identifier", identifier);
+        response.put("otp", otpCode);
+        response.put("expiresInSeconds", 300);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Forgot Password Step 2: Reset / Restart Password with verified OTP
+     * Validates OTP, verifies new password complexity, confirms match, hashes with BCrypt, updates MySQL database.
+     */
+    @PostMapping("/reset-password")
+    @Operation(summary = "Forgot Password - Reset Password", description = "Resets user password after verifying OTP with strict password validation.")
+    public ResponseEntity<Map<String, Object>> resetPasswordWithOtp(@Valid @RequestBody ResetPasswordWithOtpDto dto) {
+        String identifier = dto.getIdentifier().trim();
+
+        Optional<User> optUser = userRepository.findByIdentifier(identifier);
+        if (optUser.isEmpty()) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "No account found matching: " + identifier);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
+        }
+
+        User user = optUser.get();
+
+        // 1. Verify OTP code
+        Optional<OtpVerification> optOtp = otpVerificationRepository
+                .findTopByIdentifierAndPurposeAndIsConsumedFalseOrderByCreatedAtDesc(identifier, "PASSWORD_RESET");
+
+        if (optOtp.isEmpty()) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "No active password reset OTP request found. Please request a new code.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        OtpVerification record = optOtp.get();
+        if (record.getExpiresAt().isBefore(Instant.now())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "The password reset OTP has expired. Please request a new code.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        if (!record.getOtpCode().equals(dto.getOtpCode().trim())) {
+            record.setAttemptsCount(record.getAttemptsCount() + 1);
+            otpVerificationRepository.save(record);
+
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Invalid 6-digit OTP code entered.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        // 2. Validate New Password Requirements
+        String passwordError = ValidationUtils.getPasswordValidationError(dto.getNewPassword());
+        if (passwordError != null) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", passwordError);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        if (dto.getConfirmPassword() == null || !dto.getNewPassword().equals(dto.getConfirmPassword())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Confirmed password does not match the new password.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        // 3. Ensure new password is not identical to current password
+        if (user.getPasswordHash() != null && passwordEncoder.matches(dto.getNewPassword(), user.getPasswordHash())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "New password cannot be the same as your current password.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        // 4. Update Password in MySQL
+        user.setPasswordHash(passwordEncoder.encode(dto.getNewPassword()));
+        userRepository.save(user);
+
+        // Mark OTP consumed
+        record.setIsConsumed(true);
+        otpVerificationRepository.save(record);
+
+        logger.info("Password successfully reset for user: {}", identifier);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Password has been reset successfully! Please log in with your new password.");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Change Password for Authenticated User
+     * Verifies current password, validates new password complexity, confirms match, hashes with BCrypt, updates MySQL database.
+     */
+    @PostMapping("/change-password")
+    @Operation(summary = "Change Password (Authenticated)", description = "Updates password when providing valid current password.")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody ChangePasswordDto dto) {
+
+        if (principal == null) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Unauthorized. Please log in first.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
+        }
+
+        Optional<User> optUser = userRepository.findById(principal.getId());
+        if (optUser.isEmpty()) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "User account not found.");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
+        }
+
+        User user = optUser.get();
+
+        // 1. Verify current password
+        if (user.getPasswordHash() != null && !passwordEncoder.matches(dto.getCurrentPassword(), user.getPasswordHash())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Current password entered is incorrect.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        // 2. Validate new password complexity
+        String passwordError = ValidationUtils.getPasswordValidationError(dto.getNewPassword());
+        if (passwordError != null) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", passwordError);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        if (dto.getConfirmPassword() == null || !dto.getNewPassword().equals(dto.getConfirmPassword())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "Confirmed password does not match the new password.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        // 3. Ensure new password != old password
+        if (user.getPasswordHash() != null && passwordEncoder.matches(dto.getNewPassword(), user.getPasswordHash())) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", "New password cannot be the same as your old password.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        // 4. Update Password in MySQL
+        user.setPasswordHash(passwordEncoder.encode(dto.getNewPassword()));
+        userRepository.save(user);
+
+        logger.info("Password successfully changed for user ID: {}", user.getId());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Password changed successfully!");
         return ResponseEntity.ok(response);
     }
 
@@ -381,14 +621,25 @@ public class AuthApiController {
     }
 
     /**
-     * Sign Out
+     * Sign Out and blacklist JWT token so it cannot be reused.
      */
     @PostMapping("/logout")
-    @Operation(summary = "Sign Out", description = "Terminates the active session.")
-    public ResponseEntity<Map<String, Object>> logout() {
+    @Operation(summary = "Sign Out", description = "Terminates the active session and invalidates the JWT access token.")
+    public ResponseEntity<Map<String, Object>> logout(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            String token = bearerToken.substring(7);
+            try {
+                Date expirationDate = jwtTokenProvider.getExpirationDateFromToken(token);
+                tokenBlacklistService.revokeToken(token, expirationDate.toInstant());
+            } catch (Exception e) {
+                logger.warn("Could not parse token expiration for blacklist revocation: {}", e.getMessage());
+            }
+        }
+
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "Signed out successfully.");
+        response.put("message", "Signed out successfully. Token invalidated.");
         return ResponseEntity.ok(response);
     }
 }

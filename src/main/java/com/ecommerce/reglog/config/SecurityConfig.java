@@ -67,6 +67,8 @@ public class SecurityConfig {
                 .accessDeniedHandler(accessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
+                // Protected auth endpoints
+                .requestMatchers("/api/auth/change-password", "/api/auth/me").authenticated()
                 // Public endpoints
                 .requestMatchers(
                     "/api/v1/auth/**",

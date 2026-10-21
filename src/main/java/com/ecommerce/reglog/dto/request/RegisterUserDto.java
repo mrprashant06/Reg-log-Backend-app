@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 public class RegisterUserDto {
 
     @NotBlank(message = "Full Name is required")
-    @Size(min = 2, max = 100, message = "Full name must be between 2 and 100 characters")
+    @Size(min = 3, max = 100, message = "Full name must be between 3 and 100 characters")
     private String fullName;
 
     @NotBlank(message = "Identifier (Email or Phone) is required")
