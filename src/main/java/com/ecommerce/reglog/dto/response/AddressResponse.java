@@ -1,10 +1,13 @@
 package com.ecommerce.reglog.dto.response;
 
+import com.ecommerce.reglog.entity.Address;
 import com.ecommerce.reglog.enums.AddressType;
 
 public class AddressResponse {
 
     private Long id;
+    private String fullName;
+    private String mobileNumber;
     private AddressType addressType;
     private String streetAddress;
     private String apartmentSuite;
@@ -29,12 +32,44 @@ public class AddressResponse {
         this.isDefault = isDefault;
     }
 
+    public static AddressResponse fromEntity(Address a) {
+        AddressResponse res = new AddressResponse();
+        res.setId(a.getId());
+        res.setFullName(a.getFullName());
+        res.setMobileNumber(a.getMobileNumber());
+        res.setAddressType(a.getAddressType());
+        res.setStreetAddress(a.getStreetAddress());
+        res.setApartmentSuite(a.getApartmentSuite());
+        res.setCity(a.getCity());
+        res.setState(a.getState());
+        res.setPostalCode(a.getPostalCode());
+        res.setCountry(a.getCountry());
+        res.setDefault(a.isDefault());
+        return res;
+    }
+
     public Long getId() {
         return id;
     }
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getMobileNumber() {
+        return mobileNumber;
+    }
+
+    public void setMobileNumber(String mobileNumber) {
+        this.mobileNumber = mobileNumber;
     }
 
     public AddressType getAddressType() {
@@ -61,6 +96,10 @@ public class AddressResponse {
         this.apartmentSuite = apartmentSuite;
     }
 
+    public String getHouseFlatNumber() {
+        return apartmentSuite;
+    }
+
     public String getCity() {
         return city;
     }
@@ -83,6 +122,10 @@ public class AddressResponse {
 
     public void setPostalCode(String postalCode) {
         this.postalCode = postalCode;
+    }
+
+    public String getPinCode() {
+        return postalCode;
     }
 
     public String getCountry() {

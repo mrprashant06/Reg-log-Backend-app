@@ -18,9 +18,15 @@ public class Address {
     @JsonIgnore
     private User user;
 
+    @Column(name = "full_name", length = 100)
+    private String fullName;
+
+    @Column(name = "mobile_number", length = 20)
+    private String mobileNumber;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "address_type", length = 20, nullable = false)
-    private AddressType addressType = AddressType.SHIPPING;
+    @Column(name = "address_type", length = 30, nullable = false)
+    private AddressType addressType = AddressType.HOME;
 
     @Column(name = "street_address", nullable = false, length = 255)
     private String streetAddress;
@@ -38,7 +44,7 @@ public class Address {
     private String postalCode;
 
     @Column(nullable = false, length = 100)
-    private String country;
+    private String country = "India";
 
     @Column(name = "is_default", nullable = false)
     private boolean isDefault = false;
@@ -53,8 +59,10 @@ public class Address {
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
+        if (this.createdAt == null) this.createdAt = Instant.now();
+        if (this.updatedAt == null) this.updatedAt = Instant.now();
+        if (this.country == null || this.country.isBlank()) this.country = "India";
+        if (this.addressType == null) this.addressType = AddressType.HOME;
     }
 
     @PreUpdate
@@ -76,6 +84,22 @@ public class Address {
 
     public void setUser(User user) {
         this.user = user;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getMobileNumber() {
+        return mobileNumber;
+    }
+
+    public void setMobileNumber(String mobileNumber) {
+        this.mobileNumber = mobileNumber;
     }
 
     public AddressType getAddressType() {
@@ -102,6 +126,14 @@ public class Address {
         this.apartmentSuite = apartmentSuite;
     }
 
+    public String getHouseFlatNumber() {
+        return apartmentSuite;
+    }
+
+    public void setHouseFlatNumber(String houseFlatNumber) {
+        this.apartmentSuite = houseFlatNumber;
+    }
+
     public String getCity() {
         return city;
     }
@@ -124,6 +156,14 @@ public class Address {
 
     public void setPostalCode(String postalCode) {
         this.postalCode = postalCode;
+    }
+
+    public String getPinCode() {
+        return postalCode;
+    }
+
+    public void setPinCode(String pinCode) {
+        this.postalCode = pinCode;
     }
 
     public String getCountry() {

@@ -6,13 +6,17 @@ import jakarta.validation.constraints.Size;
 
 public class AddressRequest {
 
-    private AddressType addressType = AddressType.SHIPPING;
+    private String fullName;
+
+    private String mobileNumber;
+
+    private AddressType addressType = AddressType.HOME;
 
     @NotBlank(message = "Street address is required")
     @Size(max = 255, message = "Street address cannot exceed 255 characters")
     private String streetAddress;
 
-    @Size(max = 100, message = "Apartment/suite cannot exceed 100 characters")
+    @Size(max = 100, message = "House/Flat/Apartment number cannot exceed 100 characters")
     private String apartmentSuite;
 
     @NotBlank(message = "City is required")
@@ -23,17 +27,31 @@ public class AddressRequest {
     @Size(max = 100, message = "State cannot exceed 100 characters")
     private String state;
 
-    @NotBlank(message = "Postal code is required")
+    @NotBlank(message = "Postal/PIN code is required")
     @Size(max = 20, message = "Postal code cannot exceed 20 characters")
     private String postalCode;
 
-    @NotBlank(message = "Country is required")
-    @Size(max = 100, message = "Country cannot exceed 100 characters")
-    private String country;
+    private String country = "India";
 
     private boolean isDefault = false;
 
     public AddressRequest() {}
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getMobileNumber() {
+        return mobileNumber;
+    }
+
+    public void setMobileNumber(String mobileNumber) {
+        this.mobileNumber = mobileNumber;
+    }
 
     public AddressType getAddressType() {
         return addressType;
@@ -59,6 +77,14 @@ public class AddressRequest {
         this.apartmentSuite = apartmentSuite;
     }
 
+    public String getHouseFlatNumber() {
+        return apartmentSuite;
+    }
+
+    public void setHouseFlatNumber(String houseFlatNumber) {
+        this.apartmentSuite = houseFlatNumber;
+    }
+
     public String getCity() {
         return city;
     }
@@ -81,6 +107,14 @@ public class AddressRequest {
 
     public void setPostalCode(String postalCode) {
         this.postalCode = postalCode;
+    }
+
+    public String getPinCode() {
+        return postalCode;
+    }
+
+    public void setPinCode(String pinCode) {
+        this.postalCode = pinCode;
     }
 
     public String getCountry() {

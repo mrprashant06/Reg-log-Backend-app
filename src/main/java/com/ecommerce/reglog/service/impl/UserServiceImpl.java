@@ -9,6 +9,7 @@ import com.ecommerce.reglog.dto.response.UserProfileResponse;
 import com.ecommerce.reglog.entity.Address;
 import com.ecommerce.reglog.entity.Role;
 import com.ecommerce.reglog.entity.User;
+import com.ecommerce.reglog.enums.AddressType;
 import com.ecommerce.reglog.enums.ERole;
 import com.ecommerce.reglog.enums.UserStatus;
 import com.ecommerce.reglog.exception.BadRequestException;
@@ -95,13 +96,15 @@ public class UserServiceImpl implements UserService {
 
         Address address = new Address();
         address.setUser(user);
-        address.setAddressType(request.getAddressType());
+        address.setFullName(request.getFullName() != null && !request.getFullName().isBlank() ? request.getFullName() : user.getFullName());
+        address.setMobileNumber(request.getMobileNumber() != null && !request.getMobileNumber().isBlank() ? request.getMobileNumber() : user.getPhone());
+        address.setAddressType(request.getAddressType() != null ? request.getAddressType() : AddressType.HOME);
         address.setStreetAddress(request.getStreetAddress());
         address.setApartmentSuite(request.getApartmentSuite());
         address.setCity(request.getCity());
         address.setState(request.getState());
         address.setPostalCode(request.getPostalCode());
-        address.setCountry(request.getCountry());
+        address.setCountry(request.getCountry() != null && !request.getCountry().isBlank() ? request.getCountry() : "India");
 
         if (request.isDefault() || user.getAddresses().isEmpty()) {
             user.getAddresses().forEach(a -> a.setDefault(false));
@@ -219,16 +222,6 @@ public class UserServiceImpl implements UserService {
     }
 
     private AddressResponse mapToAddressResponse(Address addr) {
-        return new AddressResponse(
-                addr.getId(),
-                addr.getAddressType(),
-                addr.getStreetAddress(),
-                addr.getApartmentSuite(),
-                addr.getCity(),
-                addr.getState(),
-                addr.getPostalCode(),
-                addr.getCountry(),
-                addr.isDefault()
-        );
+        return AddressResponse.fromEntity(addr);
     }
 }

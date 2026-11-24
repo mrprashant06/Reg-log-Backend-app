@@ -19,6 +19,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -69,8 +75,14 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Protected auth endpoints
                 .requestMatchers("/api/auth/change-password", "/api/auth/me").authenticated()
-                // Public endpoints
+                // Admin-only endpoints
+                .requestMatchers("/api/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
+                // Public browsing endpoints
                 .requestMatchers(
+                    "/api/categories/**",
+                    "/api/products/**",
+                    "/api/search/**",
+                    "/api/recommendations/**",
                     "/api/v1/auth/**",
                     "/api/auth/**",
                     "/v3/api-docs/**",
@@ -79,8 +91,15 @@ public class SecurityConfig {
                     "/h2-console/**",
                     "/actuator/health"
                 ).permitAll()
-                // Admin-only endpoints
-                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                // Authenticated customer endpoints
+                .requestMatchers(
+                    "/api/cart/**",
+                    "/api/addresses/**",
+                    "/api/checkout/**",
+                    "/api/payments/**",
+                    "/api/orders/**",
+                    "/api/v1/users/**"
+                ).authenticated()
                 // All other requests require authentication
                 .anyRequest().authenticated()
             )
@@ -90,5 +109,26 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:4200",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5174"
+        ));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }
