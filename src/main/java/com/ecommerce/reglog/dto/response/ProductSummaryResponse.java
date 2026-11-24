@@ -17,6 +17,7 @@ public class ProductSummaryResponse {
     private String categoryName;
     private String categorySlug;
     private String imageUrl;
+    private String secondaryImageUrl;
     private BigDecimal originalPrice;
     private BigDecimal sellingPrice;
     private Integer discountPercentage;
@@ -42,6 +43,7 @@ public class ProductSummaryResponse {
             res.setCategorySlug(p.getCategory().getSlug());
         }
         res.setImageUrl(p.getPrimaryImageUrl());
+        res.setSecondaryImageUrl(p.getSecondaryImageUrl());
         res.setOriginalPrice(p.getOriginalPrice());
         res.setSellingPrice(p.getSellingPrice());
         res.setDiscountPercentage(p.getDiscountPercentage());
@@ -129,6 +131,14 @@ public class ProductSummaryResponse {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getSecondaryImageUrl() {
+        return secondaryImageUrl;
+    }
+
+    public void setSecondaryImageUrl(String secondaryImageUrl) {
+        this.secondaryImageUrl = secondaryImageUrl;
     }
 
     public BigDecimal getOriginalPrice() {

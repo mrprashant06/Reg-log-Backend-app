@@ -493,6 +493,7 @@ public class DataInitializer implements CommandLineRunner {
         product.setCategory(category);
         product.setOriginalPrice(originalPrice);
         product.setSellingPrice(sellingPrice);
+        product.setCostPrice(sellingPrice.multiply(BigDecimal.valueOf(0.55)));
         product.setAvailableStock(stock);
         product.setGender(gender);
         product.setRating(rating);

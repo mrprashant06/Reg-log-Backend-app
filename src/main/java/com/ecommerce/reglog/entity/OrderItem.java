@@ -39,6 +39,9 @@ public class OrderItem {
     @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice = BigDecimal.ZERO;
 
+    @Column(name = "unit_cost_price", precision = 12, scale = 2)
+    private BigDecimal unitCostPrice = BigDecimal.ZERO;
+
     @Column(nullable = false)
     private Integer quantity = 1;
 
@@ -58,6 +61,7 @@ public class OrderItem {
         this.selectedSize = selectedSize;
         this.selectedColor = selectedColor;
         this.unitPrice = unitPrice != null ? unitPrice : BigDecimal.ZERO;
+        this.unitCostPrice = product != null && product.getCostPrice() != null ? product.getCostPrice() : this.unitPrice.multiply(BigDecimal.valueOf(0.6));
         this.quantity = quantity != null ? quantity : 1;
         this.totalPrice = this.unitPrice.multiply(BigDecimal.valueOf(this.quantity));
     }
@@ -148,5 +152,13 @@ public class OrderItem {
 
     public void setTotalPrice(BigDecimal totalPrice) {
         this.totalPrice = totalPrice;
+    }
+
+    public BigDecimal getUnitCostPrice() {
+        return unitCostPrice != null ? unitCostPrice : unitPrice.multiply(BigDecimal.valueOf(0.6));
+    }
+
+    public void setUnitCostPrice(BigDecimal unitCostPrice) {
+        this.unitCostPrice = unitCostPrice;
     }
 }

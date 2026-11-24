@@ -42,6 +42,9 @@ public class Product {
     @Column(name = "selling_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal sellingPrice;
 
+    @Column(name = "cost_price", precision = 12, scale = 2)
+    private BigDecimal costPrice;
+
     @Column(name = "discount_percentage")
     private Integer discountPercentage = 0;
 
@@ -171,6 +174,14 @@ public class Product {
         this.sellingPrice = sellingPrice;
     }
 
+    public BigDecimal getCostPrice() {
+        return costPrice != null ? costPrice : (sellingPrice != null ? sellingPrice.multiply(BigDecimal.valueOf(0.6)) : BigDecimal.ZERO);
+    }
+
+    public void setCostPrice(BigDecimal costPrice) {
+        this.costPrice = costPrice;
+    }
+
     public Integer getDiscountPercentage() {
         return discountPercentage;
     }
@@ -269,5 +280,18 @@ public class Product {
             return images.get(0).getImageUrl();
         }
         return null;
+    }
+
+    public String getSecondaryImageUrl() {
+        if (images != null && images.size() > 1) {
+            String primary = getPrimaryImageUrl();
+            for (ProductImage img : images) {
+                if (!img.getImageUrl().equals(primary)) {
+                    return img.getImageUrl();
+                }
+            }
+            return images.get(1).getImageUrl();
+        }
+        return getPrimaryImageUrl();
     }
 }

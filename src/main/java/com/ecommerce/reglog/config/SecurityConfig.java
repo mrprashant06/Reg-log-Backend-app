@@ -94,6 +94,8 @@ public class SecurityConfig {
                 // Authenticated customer endpoints
                 .requestMatchers(
                     "/api/cart/**",
+                    "/api/wishlist/**",
+                    "/api/v1/wishlist/**",
                     "/api/addresses/**",
                     "/api/checkout/**",
                     "/api/payments/**",
